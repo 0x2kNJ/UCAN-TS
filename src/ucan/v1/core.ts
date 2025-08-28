@@ -162,10 +162,10 @@ export async function writeContainerV1(envelopes: Envelope[]): Promise<Uint8Arra
     cids.push(cid);
     blocks.push({ cid, bytes });
   }
-  const { writer, out } = CarWriter.create(cids);
+  const { writer, out } = CarWriter.create(cids as any);
   (async () => {
     for (const block of blocks) {
-      await writer.put(block);
+      await (writer as any).put(block as any);
     }
     await writer.close();
   })();
