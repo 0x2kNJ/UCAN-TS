@@ -76,17 +76,19 @@ function normalizeInvocationPayload(p: any): InvocationPayload | null {
 }
 
 function encodeInvocationPayloadForTransport(p: InvocationPayload): Uint8Array {
+  const args: any = { with: p.cap?.with };
+  if (p.cap?.nb !== undefined) args.nb = p.cap.nb;
   const p2: any = {
     iss: p.iss,
     aud: p.aud,
     cmd: p.cap?.can,
-    args: { with: p.cap?.with, nb: p.cap?.nb },
-    prf: p.prf,
+    args,
     nbf: p.nbf,
     exp: p.exp,
-    nonce: p.nonce,
-    meta: p.meta,
   };
+  if (p.prf && p.prf.length) p2.prf = p.prf;
+  if (p.nonce !== undefined) p2.nonce = p.nonce;
+  if (p.meta !== undefined) p2.meta = p.meta;
   return cborEncode(p2);
 }
 
