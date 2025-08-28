@@ -83,39 +83,47 @@ export function encryptionKeyToString(encryptionKey: EncryptionKey): string {
  * Production-ready key derivation function
  */
 export function deriveEncryptionKeyFromPassword(
-  password: string, 
-  salt?: Uint8Array, 
-  iterations: number = 100000
+  password: string,
+  salt?: Uint8Array,
+  opslimit: number = _sodium.crypto_pwhash_OPSLIMIT_MODERATE,
+  memlimit: number = _sodium.crypto_pwhash_MEMLIMIT_MODERATE
 ): { key: EncryptionKey; salt: Uint8Array } {
-  const actualSalt = salt || sodium.randombytes_buf(32);
-  
-  // Use PBKDF2-HMAC-SHA256 for proper key derivation
+  const saltBytes = (typeof (_sodium as any).crypto_pwhash_SALTBYTES === 'number' && (_sodium as any).crypto_pwhash_SALTBYTES > 0)
+    ? (_sodium as any).crypto_pwhash_SALTBYTES
+    : 16; // libsodium default salt size for crypto_pwhash
+  const actualSalt = salt || sodium.randombytes_buf(saltBytes);
   const passwordBytes = new TextEncoder().encode(password);
-  
-  // Implement PBKDF2 using libsodium's HMAC
-  let derivedKey = passwordBytes;
-  
-  // Iterative HMAC application (simplified PBKDF2)
-  for (let i = 0; i < iterations; i++) {
-    const combined = new Uint8Array(derivedKey.length + actualSalt.length + 4);
-    combined.set(derivedKey);
-    combined.set(actualSalt, derivedKey.length);
-    // Add iteration counter as big-endian 32-bit integer
-    combined.set(new Uint8Array([
-      (i >> 24) & 0xff,
-      (i >> 16) & 0xff,
-      (i >> 8) & 0xff,
-      i & 0xff
-    ]), derivedKey.length + actualSalt.length);
-    
-    derivedKey = new Uint8Array(sodium.crypto_hash(combined));
+  let derived: Uint8Array;
+  if (typeof (sodium as any).crypto_pwhash === 'function') {
+    derived = (sodium as any).crypto_pwhash(
+      32,
+      passwordBytes,
+      actualSalt,
+      opslimit,
+      memlimit,
+      (_sodium as any).crypto_pwhash_ALG_DEFAULT
+    );
+  } else {
+    // Fallback: deterministic PBKDF2-like derivation using iterative hashing
+    // Not recommended for production if crypto_pwhash is available
+    const iterations = 100000;
+    let tmp = new Uint8Array([...passwordBytes, ...actualSalt]);
+    for (let i = 0; i < iterations; i++) {
+      const counter = new Uint8Array([
+        (i >> 24) & 0xff,
+        (i >> 16) & 0xff,
+        (i >> 8) & 0xff,
+        i & 0xff
+      ]);
+      const combined = new Uint8Array(tmp.length + counter.length);
+      combined.set(tmp);
+      combined.set(counter, tmp.length);
+      tmp = new Uint8Array(sodium.crypto_hash(combined));
+    }
+    derived = tmp.slice(0, 32);
   }
-  
-  // Take first 32 bytes for secretbox key
-  const key = derivedKey.slice(0, 32);
-  
   return {
-    key: { key },
+    key: { key: derived },
     salt: actualSalt
   };
 }
@@ -150,8 +158,8 @@ export function deriveEncryptionKeyFromPasswordScrypt(
       salt: actualSalt
     };
   } catch {
-    // Fallback to PBKDF2 if scrypt not available
-    return deriveEncryptionKeyFromPassword(password, actualSalt, 100000);
+    // Fallback to Argon2id if scrypt not available
+    return deriveEncryptionKeyFromPassword(password, actualSalt);
   }
 }
 

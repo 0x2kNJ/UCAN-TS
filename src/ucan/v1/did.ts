@@ -1,4 +1,5 @@
 import { toB64Url, fromB64Url, verifyEd25519 } from "./index.js";
+import { base58btc } from "multiformats/bases/base58";
 
 // Enhanced DID Document structure
 export interface DIDDocument {
@@ -104,14 +105,12 @@ export class DidKeyResolver implements DIDResolver {
     if (!did.startsWith("did:key:z")) {
       throw new Error("Invalid did:key format");
     }
-    const b58part = did.slice(9); // remove "did:key:z"
+    const multibase = did.slice(8); // remove "did:key:"
     try {
-      const decoded = fromB64Url(b58part);
-      
+      const decoded = base58btc.decode(multibase);
       if (decoded[0] !== 0xed || decoded[1] !== 0x01) {
         throw new Error("Not an Ed25519 did:key");
       }
-      
       const pk = decoded.slice(2);
       return toB64Url(pk);
     } catch (error) {
@@ -123,8 +122,8 @@ export class DidKeyResolver implements DIDResolver {
     const publicKey = fromB64Url(publicKeyB64);
     // Ed25519 multicodec prefix: 0xed01 + public key
     const multicodecKey = new Uint8Array([0xed, 0x01, ...publicKey]);
-    // z prefix for base58btc encoding
-    return `z${toB64Url(multicodecKey).replace(/=/g, '')}`;
+    // base58btc with z-prefix
+    return base58btc.encode(multicodecKey);
   }
 }
 
@@ -257,10 +256,11 @@ export class DIDDocumentUtils {
 
   static getPublicKeyBytes(verificationMethod: VerificationMethod): Uint8Array {
     if (verificationMethod.publicKeyMultibase) {
-      // Remove 'z' prefix and decode
-      const encoded = verificationMethod.publicKeyMultibase.slice(1);
-      const decoded = fromB64Url(encoded);
-      // Skip multicodec prefix (first 2 bytes for Ed25519)
+      // Multibase base58btc (z-prefix)
+      if (!verificationMethod.publicKeyMultibase.startsWith('z')) {
+        throw new Error("Unsupported multibase; expected base58btc 'z' prefix");
+      }
+      const decoded = base58btc.decode(verificationMethod.publicKeyMultibase);
       return decoded.slice(2);
     }
     

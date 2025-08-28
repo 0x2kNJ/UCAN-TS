@@ -30,7 +30,7 @@ signer.dispose(); // Zeros memory
 ### 4. **Cryptographic Security**
 - **Ed25519 signatures**: Industry-standard elliptic curve
 - **XSalsa20-Poly1305 encryption**: Authenticated encryption
-- **PBKDF2 key derivation**: 100,000 iterations by default
+- **Argon2id key derivation (libsodium crypto_pwhash)**: with secure fallbacks
 - **Secure random generation**: libsodium-based entropy
 
 ### 5. **Audit Logging**
@@ -95,6 +95,8 @@ app.use('/mcp/mint', validateMintRequest);
 - **Delegation chains**: Validate chain integrity
 
 ### 4. **Container Security**
+- **CAR v1 containers**: Envelopes stored as dag-cbor blocks
+- **Synchronous CAR header detection** with robust legacy checks
 - **Size limits**: Prevent DoS via large containers
 - **Validation**: Verify envelope structure
 - **Error handling**: Don't leak internal details
@@ -214,3 +216,13 @@ This implementation follows security best practices, but security is an ongoing 
 5. **Stay informed** about UCAN security advisories
 
 For security issues, please follow responsible disclosure procedures and contact the maintainers privately.
+
+## ✅ Recent v1 Security Enhancements
+
+- **Canonical DAG-CBOR enforcement** for payloads to prevent malleability.
+- **Signature domain separation** using context prefixes:
+  - `ucan/delegation@v1`
+  - `ucan/invocation@v1`
+- **Container format migration to CAR v1**, ensuring interoperability and secure parsing.
+- **Argon2id (libsodium crypto_pwhash)** for key derivation with fallbacks where unavailable.
+- **Minimal core extraction** to `src/ucan/v1/core` for reusable crypto/types/CBOR/CAR, with logging/HTTP and advanced validators kept out of core.

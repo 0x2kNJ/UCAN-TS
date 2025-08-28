@@ -1,0 +1,54 @@
+{
+  "vectors": [
+    {
+      "name": "local-vector-1",
+      "seedB64Url": "rcBsiF30jnI6zH6Qo1fIr2t06osm9ieuF67mPXmMFSQ",
+      "payload": {
+        "iss": "did:key:z6MkvDLugPRZecfkFaatN6Lc48QuPminmj7duBcf1PrzZyEn",
+        "aud": "did:key:z6MkvDLugPRZecfkFaatN6Lc48QuPminmj7duBcf1PrzZyEn",
+        "att": [
+          {
+            "with": "data/fetch",
+            "can": "read"
+          }
+        ],
+        "nbf": 1700000000,
+        "exp": 1700000060,
+        "prf": [],
+        "meta": {
+          "note": "local-vector-1"
+        }
+      },
+      "expected": {
+        "did": "did:key:z6MkvDLugPRZecfkFaatN6Lc48QuPminmj7duBcf1PrzZyEn",
+        "signatureB64Url": "-RNUCeCPezHGsXvCy2HLE8mlywVK8F08sA60fiPrMpLGGRWZTN9ZWO7P7H2mdDY1tLmcsrWgGOCcoLaI-_wCAA",
+        "cid": "bafyreifkd4vpaytdrjs2xzae2k7ub5k32pwfstyveamvqwgxyzcodkipqi"
+      }
+    },
+    {
+      "name": "local-vector-2",
+      "seedB64Url": "_ouKBnABW3fgKkkISR8C9ZkSC4uC16Qg9mxJzXCkfD0",
+      "payload": {
+        "iss": "did:key:z6MkgpD3EHGsxaEMPkFk4U1r48zDkw4vcTHEGqtmxKryWYnC",
+        "aud": "did:key:z6MkgpD3EHGsxaEMPkFk4U1r48zDkw4vcTHEGqtmxKryWYnC",
+        "att": [
+          {
+            "with": "data/fetch",
+            "can": "read"
+          }
+        ],
+        "nbf": 1700000000,
+        "exp": 1700000060,
+        "prf": [],
+        "meta": {
+          "note": "local-vector-2"
+        }
+      },
+      "expected": {
+        "did": "did:key:z6MkgpD3EHGsxaEMPkFk4U1r48zDkw4vcTHEGqtmxKryWYnC",
+        "signatureB64Url": "-YfAhVxTOShWUj2-kLFdHhCRVeKO_84JYgnzZ06deOyxImI0mlhbEx2ZMtsCWekL7qFgPsdmsJock-XbQE-5Dw",
+        "cid": "bafyreici6vrrhhe5ob7wbab7il35em4nr674xavwcvaqbwcsvfjh4g7kii"
+      }
+    }
+  ]
+}
