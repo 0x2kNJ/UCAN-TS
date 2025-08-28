@@ -97,6 +97,8 @@ export interface VerifyOptions {
   onTransparencyCID?: (cid: CID, env: Envelope) => void;
   // Optional policy evaluator for invocation + delegation chain
   policy?: PolicyEvaluator;
+  // Optional clock skew allowance (seconds)
+  clockSkewSec?: number;
 }
 
 // Ed25519 Signer with secure memory handling
@@ -378,6 +380,7 @@ export async function verifyDelegationV1(env: Envelope, options: VerifyOptions =
     
     const payload = cborDecode(env.payload) as DelegationPayload;
     const currentTime = options.now ?? now();
+    const skew = options.clockSkewSec ?? 60;
     
     // Validate payload fields
     if (!InputValidator.validateDID(payload.iss) || 
@@ -393,11 +396,11 @@ export async function verifyDelegationV1(env: Envelope, options: VerifyOptions =
     }
 
     // Check time bounds
-    if (payload.nbf > currentTime) {
+    if (payload.nbf > currentTime + skew) {
       return { ok: false, reason: "not_yet_valid" };
     }
     
-    if (payload.exp <= currentTime) {
+    if (payload.exp + skew <= currentTime) {
       return { ok: false, reason: "expired" };
     }
     
@@ -452,6 +455,7 @@ export async function verifyInvocationV1(env: Envelope, options: VerifyOptions =
 
     const payload = cborDecode(env.payload) as InvocationPayload;
     const currentTime = options.now ?? now();
+    const skew = options.clockSkewSec ?? 60;
     
     // Validate payload fields
     if (!InputValidator.validateDID(payload.iss) || 
@@ -467,11 +471,11 @@ export async function verifyInvocationV1(env: Envelope, options: VerifyOptions =
     }
     
     // Check time bounds
-    if (payload.nbf > currentTime) {
+    if (payload.nbf > currentTime + skew) {
       return { ok: false, reason: "not_yet_valid" };
     }
     
-    if (payload.exp <= currentTime) {
+    if (payload.exp + skew <= currentTime) {
       return { ok: false, reason: "expired" };
     }
     
@@ -578,6 +582,11 @@ export async function verifyInvocationAgainstChainV1(
   options: VerifyOptions = {}
 ): Promise<VerifyResult> {
   try {
+    // Depth guard
+    const maxDepth = 10;
+    if (chain.length > maxDepth) {
+      return { ok: false, reason: "depth_exceeded" };
+    }
     // Verify invocation itself
     const invResult = await verifyInvocationV1(invocation, options);
     if (!invResult.ok) {
@@ -590,12 +599,19 @@ export async function verifyInvocationAgainstChainV1(
       return { ok: false, reason: "empty_chain" };
     }
     
-    // Verify each delegation in chain
+    // Verify each delegation in chain and detect simple cycles (iss->aud repeats)
+    const seenLinks = new Set<string>();
     for (let i = 0; i < chain.length; i++) {
       const delResult = await verifyDelegationV1(chain[i], options);
       if (!delResult.ok) {
         return { ok: false, reason: `delegation_invalid: ${delResult.reason}` };
       }
+      const d = cborDecode(chain[i].payload) as DelegationPayload;
+      const link = `${d.iss}->${d.aud}`;
+      if (seenLinks.has(link)) {
+        return { ok: false, reason: "cycle_detected" };
+      }
+      seenLinks.add(link);
       // Per-delegation revocation transparency
       if (options.isRevokedCID || options.onTransparencyCID) {
         const cid = await cidForEnvelope(chain[i]);
