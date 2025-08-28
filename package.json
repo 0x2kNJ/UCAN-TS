@@ -2,7 +2,14 @@
   "name": "ucan-ts",
   "version": "1.0.0",
   "description": "UCAN TypeScript implementation with v1 support",
-  "main": "dist/index.js",
+  "main": "dist/ucan/v1/index.js",
+  "types": "dist/ucan/v1/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/ucan/v1/index.js",
+      "types": "./dist/ucan/v1/index.d.ts"
+    }
+  },
   "type": "module",
   "scripts": {
     "build": "npx tsc",
