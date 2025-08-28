@@ -35,6 +35,7 @@
     "prepare": "npm run build"
   },
   "bin": {
+    "ucan": "./dist/cli/ucan.js",
     "ucan-toolkit": "./dist/cli/toolkit.js"
   },
   "dependencies": {
