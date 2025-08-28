@@ -191,12 +191,15 @@ export function makeMintDepsFromEnv(overrides: Partial<MintDeps> = {}): MintDeps
         let legacy: string | undefined;
         
         if (emit === "legacy" || emit === "both") {
-          legacy = `ucan.${Buffer.from(JSON.stringify({ 
-            sub: subjectDid, 
-            caps, 
-            exp: payload.exp, 
-            facts 
-          })).toString("base64url")}.sig`;
+          const obj = { sub: subjectDid, caps, exp: payload.exp, facts };
+          const json = JSON.stringify(obj);
+          const bytes = new TextEncoder().encode(json);
+          const toB64Url = (u8: Uint8Array): string => {
+            let s = ""; for (let i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]);
+            const b64 = (typeof btoa === "function" ? btoa(s) : Buffer.from(u8).toString("base64"));
+            return b64.replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+          };
+          legacy = `ucan.${toB64Url(bytes)}.sig`;
         }
         
         const body: any = { cid };

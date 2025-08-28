@@ -158,6 +158,28 @@ describe("UCAN v1 Delegation/Invocation", () => {
     expect(vr.reason).toBe("bad_signature");
   });
 
+  it("rejects tampered payload bytes", async () => {
+    const { signer } = await Ed25519Signer.generate();
+    const pk = await signer.publicKey();
+    const did = didKeyFromPublicKeyB64Url(toB64Url(pk));
+
+    const env = await signDelegationV1({ 
+      iss: did, 
+      aud: did, 
+      att: [{ with: "*", can: "*/*" }], 
+      nbf: now(), 
+      exp: now()+60 
+    }, signer);
+
+    // Flip one byte in payload
+    env.payload = env.payload.slice();
+    env.payload[0] ^= 0x01;
+
+    const vr = await verifyDelegationV1(env);
+    expect(vr.ok).toBe(false);
+    expect(vr.reason).toBe("invalid_format");
+  });
+
   it("handles wildcard capabilities correctly", async () => {
     const { signer: service } = await Ed25519Signer.generate();
     const svcDid = didKeyFromPublicKeyB64Url(toB64Url(await service.publicKey()));

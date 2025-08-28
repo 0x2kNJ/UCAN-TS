@@ -304,10 +304,15 @@ export async function writeContainerV1(envelopes: Envelope[]): Promise<Uint8Arra
   }
 
   // Avoid type conflicts between multiformats versions in deps by casting
-  const { writer, out } = CarWriter.create(cids as any);
+  const root = cids[0];
+  const { writer, out } = CarWriter.create(root as any);
 
   (async () => {
+    // Put root first, then others
+    const rootBlock = blocks.find(b => (b.cid as any).toString() === (root as any).toString());
+    if (rootBlock) await (writer as any).put(rootBlock as any);
     for (const block of blocks) {
+      if ((block.cid as any).toString() === (root as any).toString()) continue;
       await (writer as any).put(block as any);
     }
     await writer.close();
