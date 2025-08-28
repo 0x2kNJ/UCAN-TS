@@ -60,6 +60,36 @@ function isCanonicalCBOR(bytes: Uint8Array): boolean {
   }
 }
 
+// Invocation payload interop helpers (cap <-> cmd/args)
+function normalizeInvocationPayload(p: any): InvocationPayload | null {
+  if (p && typeof p === 'object') {
+    if (p.cap && p.cap.with && p.cap.can) {
+      return p as InvocationPayload;
+    }
+    if (p.cmd && typeof p.cmd === 'string') {
+      const args = p.args || {};
+      const cap: Capability = { with: args.with || '*', can: p.cmd, nb: args.nb };
+      return { iss: p.iss, aud: p.aud, cap, nbf: p.nbf, exp: p.exp, prf: p.prf || [], meta: p.meta, nonce: p.nonce } as InvocationPayload;
+    }
+  }
+  return null;
+}
+
+function encodeInvocationPayloadForTransport(p: InvocationPayload): Uint8Array {
+  const p2: any = {
+    iss: p.iss,
+    aud: p.aud,
+    cmd: p.cap?.can,
+    args: { with: p.cap?.with, nb: p.cap?.nb },
+    prf: p.prf,
+    nbf: p.nbf,
+    exp: p.exp,
+    nonce: p.nonce,
+    meta: p.meta,
+  };
+  return cborEncode(p2);
+}
+
 // Types
 export interface Capability {
   with: string;
@@ -311,7 +341,7 @@ export async function writeContainerV1(envelopes: Envelope[]): Promise<Uint8Arra
   const cids: CID[] = [];
   const blocks: { cid: CID; bytes: Uint8Array }[] = [];
   for (const env of envelopes) {
-    const bytes = cborEncode(env);
+    let bytes = cborEncode(env);
     const cid = await cidForEnvelope(env);
     cids.push(cid);
     blocks.push({ cid, bytes });
@@ -479,7 +509,8 @@ export async function verifyInvocationV1(env: Envelope, options: VerifyOptions =
       return { ok: false, reason: "invalid_format" };
     }
 
-    const payload = cborDecode(env.payload) as InvocationPayload;
+    const raw = cborDecode(env.payload) as any;
+    const payload = normalizeInvocationPayload(raw) || (raw as InvocationPayload);
     const currentTime = options.now ?? now();
     const skew = options.clockSkewSec ?? 0;
     
