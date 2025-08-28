@@ -493,7 +493,7 @@ export async function verifyDelegationV1(env: Envelope, options: VerifyOptions =
 
 // Invocation functions
 export async function signInvocationV1(payload: InvocationPayload, signer: UcanSigner): Promise<Envelope> {
-  const payloadBytes = cborEncode(payload);
+  const payloadBytes = encodeInvocationPayloadForTransport(payload);
   const message = prefixMessage(INVOCATION_CONTEXT, payloadBytes);
   const signature = await signer.sign(message);
   
