@@ -656,7 +656,8 @@ export async function verifyInvocationAgainstChainV1(
       return invResult;
     }
     
-    const invPayload = cborDecode(invocation.payload) as InvocationPayload;
+    const invRaw = cborDecode(invocation.payload) as any;
+    const invPayload = (normalizeInvocationPayload(invRaw) || (invRaw as InvocationPayload));
     
     if (chain.length === 0) {
       return { ok: false, reason: "empty_chain" };
