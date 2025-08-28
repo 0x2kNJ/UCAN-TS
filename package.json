@@ -20,6 +20,8 @@
     "./src/*": "./src/*"
   },
   "type": "module",
+  "sideEffects": false,
+  "license": "MIT",
   "scripts": {
     "build": "npx tsc",
     "test": "vitest run",

@@ -30,6 +30,17 @@ export function now(): number {
 // Domain separation contexts for signatures
 const DELEGATION_CONTEXT: Uint8Array = new TextEncoder().encode("ucan/delegation@v1");
 const INVOCATION_CONTEXT: Uint8Array = new TextEncoder().encode("ucan/invocation@v1");
+// Accept spec tag variants during verification for interop (rc.1 and short form)
+const DELEGATION_CONTEXT_VARIANTS: Uint8Array[] = [
+  new TextEncoder().encode("ucan/delegation@v1"),
+  new TextEncoder().encode("ucan/dlg@1.0.0-rc.1"),
+  new TextEncoder().encode("ucan/d/1.0.0-rc.1"),
+];
+const INVOCATION_CONTEXT_VARIANTS: Uint8Array[] = [
+  new TextEncoder().encode("ucan/invocation@v1"),
+  new TextEncoder().encode("ucan/inv@1.0.0-rc.1"),
+  new TextEncoder().encode("ucan/i/1.0.0-rc.1"),
+];
 const RECEIPT_CONTEXT: Uint8Array = new TextEncoder().encode("ucan/receipt@v1");
 
 function prefixMessage(prefix: Uint8Array, message: Uint8Array): Uint8Array {
@@ -412,8 +423,12 @@ export async function verifyDelegationV1(env: Envelope, options: VerifyOptions =
     const pkB64 = didKeyEd25519PublicKeyB64Url(payload.iss);
     const sigB64 = toB64Url(env.signatures[0].signature);
     
-    const message = prefixMessage(DELEGATION_CONTEXT, env.payload);
-    const validSig = await verifyEd25519(message, sigB64, pkB64);
+    // Try multiple delegation contexts for interop
+    let validSig = false;
+    for (const ctx of DELEGATION_CONTEXT_VARIANTS) {
+      const message = prefixMessage(ctx, env.payload);
+      if (await verifyEd25519(message, sigB64, pkB64)) { validSig = true; break; }
+    }
     if (!validSig) {
       return { ok: false, reason: "bad_signature" };
     }
@@ -487,8 +502,12 @@ export async function verifyInvocationV1(env: Envelope, options: VerifyOptions =
     const pkB64 = didKeyEd25519PublicKeyB64Url(payload.iss);
     const sigB64 = toB64Url(env.signatures[0].signature);
     
-    const message = prefixMessage(INVOCATION_CONTEXT, env.payload);
-    const validSig = await verifyEd25519(message, sigB64, pkB64);
+    // Try multiple invocation contexts for interop
+    let validSig = false;
+    for (const ctx of INVOCATION_CONTEXT_VARIANTS) {
+      const message = prefixMessage(ctx, env.payload);
+      if (await verifyEd25519(message, sigB64, pkB64)) { validSig = true; break; }
+    }
     if (!validSig) {
       return { ok: false, reason: "bad_signature" };
     }

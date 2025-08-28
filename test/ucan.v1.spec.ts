@@ -16,6 +16,7 @@ import {
   utf8,
   now,
 } from "../src/ucan/v1/index.js";
+import { CarReader } from "@ipld/car";
 
 describe("UCAN v1 Delegation/Invocation", () => {
   it("signs and verifies a simple delegation", async () => {
@@ -297,5 +298,10 @@ describe("UCAN v1 Delegation/Invocation", () => {
     expect(cid1.toString()).toMatch(/^bafy/);
     expect(cid2.toString()).toMatch(/^bafy/);
     expect(cid1.toString()).not.toBe(cid2.toString());
+
+    // Assert single root in CAR header
+    const reader = await CarReader.fromBytes(container);
+    const roots = await reader.getRoots();
+    expect(roots.length).toBe(1);
   });
 });
