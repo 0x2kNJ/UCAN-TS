@@ -317,12 +317,22 @@ export async function writeContainerV1(envelopes: Envelope[]): Promise<Uint8Arra
   }
 
   // Avoid type conflicts between multiformats versions in deps by casting
-  const root = cids[0];
+  // Prefer invocation as the single CAR root if present; else last envelope
+  let rootIndex = envelopes.length - 1;
+  for (let i = envelopes.length - 1; i >= 0; i--) {
+    try {
+      const p = cborDecode(envelopes[i].payload) as any;
+      if (p && p.cap) { rootIndex = i; break; }
+    } catch {
+      // ignore decode errors in selection
+    }
+  }
+  const root = cids[rootIndex];
   const { writer, out } = CarWriter.create(root as any);
 
   (async () => {
     // Put root first, then others
-    const rootBlock = blocks.find(b => (b.cid as any).toString() === (root as any).toString());
+    const rootBlock = blocks[rootIndex];
     if (rootBlock) await (writer as any).put(rootBlock as any);
     for (const block of blocks) {
       if ((block.cid as any).toString() === (root as any).toString()) continue;
