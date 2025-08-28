@@ -30,6 +30,7 @@ export function now(): number {
 // Domain separation contexts for signatures
 const DELEGATION_CONTEXT: Uint8Array = new TextEncoder().encode("ucan/delegation@v1");
 const INVOCATION_CONTEXT: Uint8Array = new TextEncoder().encode("ucan/invocation@v1");
+const RECEIPT_CONTEXT: Uint8Array = new TextEncoder().encode("ucan/receipt@v1");
 
 function prefixMessage(prefix: Uint8Array, message: Uint8Array): Uint8Array {
   const out = new Uint8Array(prefix.length + message.length);
@@ -89,10 +90,24 @@ export interface VerifyResult {
 
 export interface VerifyOptions {
   now?: number;
+  // Optional revocation hooks
+  isRevokedCID?: (cid: CID) => Promise<boolean> | boolean;
+  isRevokedDID?: (did: string) => Promise<boolean> | boolean;
+  // Optional transparency hook (e.g., append verified CIDs to an audit log)
+  onTransparencyCID?: (cid: CID, env: Envelope) => void;
+  // Optional policy evaluator for invocation + delegation chain
+  policy?: PolicyEvaluator;
 }
 
 // Ed25519 Signer with secure memory handling
-export class Ed25519Signer {
+export interface UcanSigner {
+  sign(message: Uint8Array): Promise<Uint8Array>;
+  publicKey?(): Promise<Uint8Array>;
+  publicKeyB64Url?(): Promise<string>;
+}
+
+// Ed25519 Signer with secure memory handling
+export class Ed25519Signer implements UcanSigner {
   private secureKey: SecureBuffer;
 
   constructor(secretKey: Uint8Array) {
@@ -172,6 +187,37 @@ export class Ed25519Signer {
   async signB64Url(message: Uint8Array): Promise<string> {
     const sig = await this.sign(message);
     return toB64Url(sig);
+  }
+}
+
+// Generic external signer wrapper (e.g., KMS/HSM/WebAuthn)
+export class ExternalSigner implements UcanSigner {
+  private readonly signFn: (message: Uint8Array) => Promise<Uint8Array>;
+  private readonly getPublicKeyFn?: () => Promise<Uint8Array>;
+
+  constructor(
+    signFn: (message: Uint8Array) => Promise<Uint8Array>,
+    getPublicKeyFn?: () => Promise<Uint8Array>,
+  ) {
+    this.signFn = signFn;
+    this.getPublicKeyFn = getPublicKeyFn;
+  }
+
+  async sign(message: Uint8Array): Promise<Uint8Array> {
+    if (!InputValidator.validateCBORSize(message)) {
+      throw new Error("Message too large for signing");
+    }
+    return this.signFn(message);
+  }
+
+  async publicKey(): Promise<Uint8Array> {
+    if (!this.getPublicKeyFn) throw new Error("Public key not available for ExternalSigner");
+    return this.getPublicKeyFn();
+  }
+
+  async publicKeyB64Url(): Promise<string> {
+    const pk = await this.publicKey();
+    return toB64Url(pk);
   }
 }
 
@@ -307,7 +353,7 @@ export async function readContainerV1(containerBytes: Uint8Array): Promise<Envel
 }
 
 // Delegation functions
-export async function signDelegationV1(payload: DelegationPayload, signer: Ed25519Signer): Promise<Envelope> {
+export async function signDelegationV1(payload: DelegationPayload, signer: UcanSigner): Promise<Envelope> {
   const payloadBytes = cborEncode(payload);
   const message = prefixMessage(DELEGATION_CONTEXT, payloadBytes);
   const signature = await signer.sign(message);
@@ -362,6 +408,17 @@ export async function verifyDelegationV1(env: Envelope, options: VerifyOptions =
     if (!validSig) {
       return { ok: false, reason: "bad_signature" };
     }
+    // Optional transparency + revocation checks
+    if (options.isRevokedCID || options.onTransparencyCID) {
+      const cid = await cidForEnvelope(env);
+      if (options.onTransparencyCID) options.onTransparencyCID(cid, env);
+      if (options.isRevokedCID && (await options.isRevokedCID(cid))) {
+        return { ok: false, reason: "revoked_cid" };
+      }
+    }
+    if (options.isRevokedDID && (await options.isRevokedDID(payload.iss))) {
+      return { ok: false, reason: "revoked_issuer" };
+    }
     
     return { ok: true };
   } catch {
@@ -370,7 +427,7 @@ export async function verifyDelegationV1(env: Envelope, options: VerifyOptions =
 }
 
 // Invocation functions
-export async function signInvocationV1(payload: InvocationPayload, signer: Ed25519Signer): Promise<Envelope> {
+export async function signInvocationV1(payload: InvocationPayload, signer: UcanSigner): Promise<Envelope> {
   const payloadBytes = cborEncode(payload);
   const message = prefixMessage(INVOCATION_CONTEXT, payloadBytes);
   const signature = await signer.sign(message);
@@ -424,6 +481,17 @@ export async function verifyInvocationV1(env: Envelope, options: VerifyOptions =
     const validSig = await verifyEd25519(message, sigB64, pkB64);
     if (!validSig) {
       return { ok: false, reason: "bad_signature" };
+    }
+    // Optional transparency + revocation checks
+    if (options.isRevokedCID || options.onTransparencyCID) {
+      const cid = await cidForEnvelope(env);
+      if (options.onTransparencyCID) options.onTransparencyCID(cid, env);
+      if (options.isRevokedCID && (await options.isRevokedCID(cid))) {
+        return { ok: false, reason: "revoked_cid" };
+      }
+    }
+    if (options.isRevokedDID && (await options.isRevokedDID(payload.iss))) {
+      return { ok: false, reason: "revoked_issuer" };
     }
     
     return { ok: true };
@@ -522,6 +590,14 @@ export async function verifyInvocationAgainstChainV1(
       if (!delResult.ok) {
         return { ok: false, reason: `delegation_invalid: ${delResult.reason}` };
       }
+      // Per-delegation revocation transparency
+      if (options.isRevokedCID || options.onTransparencyCID) {
+        const cid = await cidForEnvelope(chain[i]);
+        if (options.isRevokedCID && (await options.isRevokedCID(cid))) {
+          return { ok: false, reason: "revoked_cid" };
+        }
+        if (options.onTransparencyCID) options.onTransparencyCID(cid, chain[i]);
+      }
     }
     
     // Check audience/issuer linking
@@ -559,10 +635,81 @@ export async function verifyInvocationAgainstChainV1(
     if (!covered) {
       return { ok: false, reason: "invocation_cap_not_covered" };
     }
+    // Optional policy evaluator
+    if (options.policy) {
+      const policyResult = await options.policy.evaluate(invPayload, delPayloads, options.now ?? now());
+      if (!policyResult.ok) {
+        return { ok: false, reason: policyResult.reason ? `policy_denied: ${policyResult.reason}` : "policy_denied" };
+      }
+    }
     
     return { ok: true };
   } catch {
     return { ok: false, reason: "verification_error" };
+  }
+}
+
+// Policy evaluator interface (pluggable)
+export interface PolicyEvaluator {
+  evaluate(
+    invocation: InvocationPayload,
+    delegations: DelegationPayload[],
+    now: number
+  ): Promise<{ ok: true } | { ok: false; reason?: string }> | { ok: true } | { ok: false; reason?: string };
+}
+
+// Deterministic receipts (audit-friendly)
+export interface ReceiptPayload {
+  // CID of the request envelope (invocation or other)
+  req: CID;
+  // Result status and optional error
+  res: { ok: true } | { ok: false; err: string };
+  // Unix timestamp (seconds)
+  ts: number;
+  // Optional payment attestation
+  pay?: {
+    payer?: string; // DID or account id
+    amount?: string; // decimal string
+    unit?: string; // e.g., USD, credits
+  };
+  meta?: Record<string, any>;
+}
+
+export async function signReceiptV1(payload: ReceiptPayload, signer: UcanSigner): Promise<Envelope> {
+  const payloadBytes = cborEncode(payload);
+  const message = prefixMessage(RECEIPT_CONTEXT, payloadBytes);
+  const signature = await signer.sign(message);
+  return { payload: payloadBytes, signatures: [{ signature }] };
+}
+
+export async function verifyReceiptV1(env: Envelope, options: VerifyOptions & { issuerDid?: string } = {}): Promise<VerifyResult> {
+  try {
+    if (!env.payload || !env.signatures || !InputValidator.validateCBORSize(env.payload)) {
+      return { ok: false, reason: "invalid_format" };
+    }
+    if (!isCanonicalCBOR(env.payload)) {
+      return { ok: false, reason: "invalid_format" };
+    }
+    const payload = cborDecode(env.payload) as ReceiptPayload;
+    if (!payload || typeof payload.ts !== 'number' || !payload.req) {
+      return { ok: false, reason: "invalid_format" };
+    }
+    // If issuer DID is provided, verify with its public key; otherwise accept as structurally valid
+    if (options.issuerDid) {
+      const pkB64 = didKeyEd25519PublicKeyB64Url(options.issuerDid);
+      const sigB64 = toB64Url(env.signatures[0].signature);
+      const message = prefixMessage(RECEIPT_CONTEXT, env.payload);
+      const ok = await verifyEd25519(message, sigB64, pkB64);
+      if (!ok) return { ok: false, reason: "bad_signature" };
+    }
+    if (options.isRevokedCID || options.onTransparencyCID) {
+      const cid = await cidForEnvelope(env);
+      if (options.onTransparencyCID) options.onTransparencyCID(cid, env);
+      if (options.isRevokedCID && (await options.isRevokedCID(cid))) return { ok: false, reason: "revoked_cid" };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: "invalid_format" };
   }
 }
 

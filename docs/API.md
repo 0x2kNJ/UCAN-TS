@@ -99,13 +99,41 @@ Options for verification functions.
 
 ```typescript
 interface VerifyOptions {
-  now?: number;          // Override current time for testing
+  now?: number; // Override current time for testing
+  isRevokedCID?: (cid: CID) => boolean | Promise<boolean>;
+  isRevokedDID?: (did: string) => boolean | Promise<boolean>;
+  onTransparencyCID?: (cid: CID, env: Envelope) => void;
+  policy?: PolicyEvaluator; // Pluggable policy hook
 }
 ```
 
 ## Cryptographic Classes
 
-### `Ed25519Signer`
+### Signers
+#### `UcanSigner`
+Generic signer interface (supports KMS/HSM/WebAuthn-backed signers).
+
+```typescript
+interface UcanSigner {
+  sign(message: Uint8Array): Promise<Uint8Array>;
+  publicKey?(): Promise<Uint8Array>;
+  publicKeyB64Url?(): Promise<string>;
+}
+```
+
+#### `ExternalSigner`
+Wrapper for external signing functions.
+
+```typescript
+class ExternalSigner implements UcanSigner {
+  constructor(
+    signFn: (message: Uint8Array) => Promise<Uint8Array>,
+    getPublicKeyFn?: () => Promise<Uint8Array>,
+  )
+}
+```
+
+#### `Ed25519Signer`
 Core cryptographic signer for UCAN envelopes.
 
 ```typescript
@@ -176,8 +204,8 @@ Creates and signs a delegation UCAN.
 
 ```typescript
 async function signDelegationV1(
-  payload: DelegationPayload, 
-  signer: Ed25519Signer
+  payload: DelegationPayload,
+  signer: UcanSigner
 ): Promise<Envelope>
 ```
 
@@ -219,8 +247,8 @@ Creates and signs an invocation UCAN.
 
 ```typescript
 async function signInvocationV1(
-  payload: InvocationPayload, 
-  signer: Ed25519Signer
+  payload: InvocationPayload,
+  signer: UcanSigner
 ): Promise<Envelope>
 ```
 
@@ -434,6 +462,44 @@ Generates a Content Identifier for a UCAN envelope.
 async function cidForEnvelope(envelope: Envelope): Promise<CID>
 ```
 
+### Receipts
+
+#### `ReceiptPayload`
+Signed audit records for invocations or other actions.
+
+```typescript
+interface ReceiptPayload {
+  req: CID; // CID of request envelope
+  res: { ok: true } | { ok: false; err: string };
+  ts: number; // Unix timestamp (seconds)
+  pay?: { payer?: string; amount?: string; unit?: string };
+  meta?: Record<string, any>;
+}
+```
+
+#### `signReceiptV1`
+```typescript
+async function signReceiptV1(payload: ReceiptPayload, signer: UcanSigner): Promise<Envelope>
+```
+
+#### `verifyReceiptV1`
+```typescript
+async function verifyReceiptV1(env: Envelope, options?: VerifyOptions & { issuerDid?: string }): Promise<VerifyResult>
+```
+
+### Policy
+
+#### `PolicyEvaluator`
+```typescript
+interface PolicyEvaluator {
+  evaluate(
+    invocation: InvocationPayload,
+    delegations: DelegationPayload[],
+    now: number
+  ): Promise<{ ok: true } | { ok: false; reason?: string }> | { ok: true } | { ok: false; reason?: string };
+}
+```
+
 ## Express Integration
 
 ### `mountMint`
@@ -504,7 +570,11 @@ interface VerifyResult {
     | "root_issuer_mismatch"   // Chain root mismatch
     | "chain_link_broken"      // Broken chain link
     | "leaf_audience_mismatch" // Chain leaf mismatch
-    | "invocation_cap_not_covered"; // Capability not covered
+    | "invocation_cap_not_covered"
+    | "revoked_cid"
+    | "revoked_issuer"
+    | `delegation_invalid: ${string}` // Delegation error bubbled to chain verification
+    | `policy_denied: ${string}`;     // Denied by policy evaluator
 }
 ```
 

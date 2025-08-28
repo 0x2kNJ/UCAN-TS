@@ -226,3 +226,15 @@ For security issues, please follow responsible disclosure procedures and contact
 - **Container format migration to CAR v1**, ensuring interoperability and secure parsing.
 - **Argon2id (libsodium crypto_pwhash)** for key derivation with fallbacks where unavailable.
 - **Minimal core extraction** to `src/ucan/v1/core` for reusable crypto/types/CBOR/CAR, with logging/HTTP and advanced validators kept out of core.
+
+### New: Revocation, Transparency, Policy, and Receipts
+
+- **Revocation hooks**: Core verification accepts optional `isRevokedCID(CID)` and `isRevokedDID(did)` to hard-fail compromised items.
+- **Transparency callback**: `onTransparencyCID(CID, env)` invoked prior to revocation check for append-only audit logs.
+- **Policy evaluator**: Pluggable `PolicyEvaluator` lets you deny or allow based on dynamic rules without changing core.
+- **Deterministic receipts**: `signReceiptV1` and `verifyReceiptV1` provide signed audit records binding request `CID`, outcome, timestamp, and optional payment attestation.
+
+Recommended deployment:
+- Back `isRevokedCID` with a transparency log or revocation list (e.g., Redis, KV, Merkle log).
+- Back `isRevokedDID` with account suspension or key-rotation registry.
+- Use receipts for immutable billing/audit and incident response.
