@@ -4,7 +4,7 @@ A comprehensive, production-ready TypeScript implementation of User-Controlled A
 
 ## 🚀 Features
 
-- **Complete UCAN v1 Support**: Full delegation and invocation envelope implementation
+- **UCAN v1 Core**: Delegation & Invocation today; Revocation/Promise on roadmap
 - **Enterprise Security**: Advanced threat protection and real-time monitoring
 - **TypeScript Native**: Full type safety with strict mode compliance
 - **Multi-Platform**: Node.js, Browser, and Cloudflare Workers support
@@ -119,7 +119,7 @@ console.log(chainResult.ok); // true if authorized
 
 ```typescript
 import express from 'express';
-import { mountMint } from 'ucan-ts/express';
+import { mountMint } from 'ucan-ts/mint/express-v1';
 
 const app = express();
 

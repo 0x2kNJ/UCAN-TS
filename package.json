@@ -8,7 +8,16 @@
     ".": {
       "import": "./dist/ucan/v1/index.js",
       "types": "./dist/ucan/v1/index.d.ts"
-    }
+    },
+    "./mint/express-v1": {
+      "import": "./dist/mint/express-v1.js",
+      "types": "./dist/mint/express-v1.d.ts"
+    },
+    "./worker": {
+      "import": "./dist/worker.js",
+      "types": "./dist/worker.d.ts"
+    },
+    "./src/*": "./src/*"
   },
   "type": "module",
   "scripts": {
