@@ -85,6 +85,7 @@ export interface InvocationPayload {
   exp: number;
   prf: string[];
   meta?: Record<string, any>;
+  nonce?: string;
 }
 
 export interface Envelope {
