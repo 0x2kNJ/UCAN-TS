@@ -29,7 +29,8 @@
     "ucan": "tsx src/cli/toolkit.ts",
     "vectors:local": "tsx scripts/gen-local-vectors.ts > test/fixtures/local-vectors.json",
     "vectors:go:fetch": "tsx scripts/fetch-go-vectors.ts",
-    "test:cross": "npm run vectors:go:fetch --silent && vitest run test/crossimpl.spec.ts"
+    "test:cross": "npm run vectors:go:fetch --silent && vitest run test/crossimpl.spec.ts",
+    "prepare": "npm run build"
   },
   "bin": {
     "ucan-toolkit": "./dist/cli/toolkit.js"
