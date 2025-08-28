@@ -89,3 +89,4 @@ docs/build/
 examples/**/*.key
 examples/**/*.env
 examples/**/secrets.*
+Capflow-MCP-Monetization-MVP

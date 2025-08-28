@@ -380,7 +380,7 @@ export async function verifyDelegationV1(env: Envelope, options: VerifyOptions =
     
     const payload = cborDecode(env.payload) as DelegationPayload;
     const currentTime = options.now ?? now();
-    const skew = options.clockSkewSec ?? 60;
+    const skew = options.clockSkewSec ?? 0;
     
     // Validate payload fields
     if (!InputValidator.validateDID(payload.iss) || 
@@ -455,7 +455,7 @@ export async function verifyInvocationV1(env: Envelope, options: VerifyOptions =
 
     const payload = cborDecode(env.payload) as InvocationPayload;
     const currentTime = options.now ?? now();
-    const skew = options.clockSkewSec ?? 60;
+    const skew = options.clockSkewSec ?? 0;
     
     // Validate payload fields
     if (!InputValidator.validateDID(payload.iss) || 
